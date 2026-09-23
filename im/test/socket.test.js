@@ -13,10 +13,16 @@ function once(sock, ev) {
 test('注册后可收发消息,并拉取历史', async () => {
   const { url, close } = await makeServer();
   const a = connect(url), b = connect(url);
+  // register 后服务端向默认群房间广播 joined,自己也在房间内 → 能收到自己的 joined
+  const joinedA = once(a, 'joined');
   const ackA = await new Promise((r) => a.emit('register', { name: '甲' }, r));
   const ackB = await new Promise((r) => b.emit('register', { name: '乙' }, r));
   assert.equal(ackA.ok, true);
   assert.equal(ackB.ok, true);
+
+  const evtJoined = await joinedA;
+  assert.equal(typeof evtJoined.chat, 'object');
+  assert.equal(evtJoined.chat.type, 'group');
 
   const dmA = await new Promise((r) => a.emit('dm', { peerId: ackB.id }, r));
   await new Promise((r) => b.emit('dm', { peerId: ackA.id }, r));

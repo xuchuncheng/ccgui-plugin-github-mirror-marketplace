@@ -43,7 +43,7 @@ export function registerSocket(io, db) {
       for (const c of listChatsForUser(db, uid)) joinChat(c.id);
 
       ack?.({ ok: true, id: uid, nickname: name });
-      if (grp) io.to(roomOf(grp.id)).emit('joined', { chat: grp.id, user: getUserById(db, uid) });
+      if (grp) io.to(roomOf(grp.id)).emit('joined', { chat: grp, user: getUserById(db, uid) });
       broadcastPresence();
     });
 

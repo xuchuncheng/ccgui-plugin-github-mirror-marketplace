@@ -1,3 +1,40 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><title>内网吹水</title></head>
-<body><div id="placeholder">前端将在 Task 5 实现</div></body></html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>内网吹水</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div id="login" class="overlay">
+    <div class="card">
+      <h1>内网吹水</h1>
+      <input id="nick" placeholder="输入昵称" maxlength="20" />
+      <button id="enter">进入</button>
+      <p id="loginErr" class="err"></p>
+    </div>
+  </div>
+  <div id="app" class="hidden">
+    <aside id="sidebar">
+      <div id="me"></div>
+      <h3>在线同事</h3>
+      <ul id="people"></ul>
+      <h3>会话</h3>
+      <ul id="chats"></ul>
+    </aside>
+    <main id="main">
+      <header id="chatTitle">选择一个会话</header>
+      <div id="msgs"></div>
+      <div id="composer">
+        <input id="file" type="file" accept="image/*" class="hidden" />
+        <button id="imgBtn" title="发图片">🖼️</button>
+        <input id="input" placeholder="说点什么…" autocomplete="off" />
+        <button id="send">发送</button>
+      </div>
+    </main>
+  </div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
