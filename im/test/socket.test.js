@@ -27,6 +27,7 @@ test('注册后可收发消息,并拉取历史', async () => {
   const dmA = await new Promise((r) => a.emit('dm', { peerId: ackB.id }, r));
   await new Promise((r) => b.emit('dm', { peerId: ackA.id }, r));
   assert.equal(dmA.ok, true);
+  assert.ok(dmA.peer && dmA.peer.nickname === '乙');
   const chatId = dmA.chat.id;
 
   const got = once(b, 'message');
@@ -34,6 +35,7 @@ test('注册后可收发消息,并拉取历史', async () => {
   const msg = await got;
   assert.equal(msg.content, '你好');
   assert.equal(msg.sender_id, ackA.id);
+  assert.equal(msg.sender_name, '甲');
 
   const hist = await new Promise((r) => b.emit('history', { chatId }, r));
   assert.equal(hist.ok, true);

@@ -64,8 +64,9 @@ export function registerSocket(io, db) {
       for (const s of io.sockets.sockets.values()) {
         if (s.data.uid === peerId) s.join(roomOf(chat.id));
       }
+      const peer = getUserById(db, peerId);
       socket.to(roomOf(chat.id)).emit('chat-added', { chat, user: getUserById(db, uid) });
-      ack?.({ ok: true, chat });
+      ack?.({ ok: true, chat, peer });
     });
 
     socket.on('message', (data) => {
@@ -76,6 +77,7 @@ export function registerSocket(io, db) {
       const msgType = data?.msgType === 'image' ? 'image' : 'text';
       if (!content.trim() && msgType !== 'image') return;
       const msg = insertMessage(db, { chat_id: chatId, sender_id: uid, content, msg_type: msgType });
+      msg.sender_name = getUserById(db, uid).nickname;
       io.to(roomOf(chatId)).emit('message', msg);
     });
 

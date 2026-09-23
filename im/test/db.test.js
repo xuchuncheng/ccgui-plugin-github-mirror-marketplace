@@ -53,3 +53,15 @@ test('insertMessage + listMessages 按时间升序、支持 after', () => {
   const after = listMessages(db, c.id, 150);
   assert.deepEqual(after.map((m) => m.content), ['第二条']);
 });
+
+test('同毫秒消息按插入顺序(id)稳定排序,且返回发件人昵称', () => {
+  const db = createDb(':memory:');
+  const u = createUser(db, '王五');
+  const c = createChat(db, { type: 'dm' });
+  insertMessage(db, { chat_id: c.id, sender_id: u.id, content: '甲', ts: 100 });
+  insertMessage(db, { chat_id: c.id, sender_id: u.id, content: '乙', ts: 100 });
+  insertMessage(db, { chat_id: c.id, sender_id: u.id, content: '丙', ts: 100 });
+  const all = listMessages(db, c.id);
+  assert.deepEqual(all.map((m) => m.content), ['甲', '乙', '丙']);
+  assert.ok(all.every((m) => m.sender_name === '王五'));
+});

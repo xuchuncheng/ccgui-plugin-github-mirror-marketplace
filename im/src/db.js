@@ -99,6 +99,7 @@ export function insertMessage(db, { chat_id, sender_id, content, msg_type = 'tex
 }
 
 export function listMessages(db, chatId, after = 0) {
-  return db.prepare('SELECT * FROM messages WHERE chat_id=? AND ts>? ORDER BY ts ASC')
-    .all(chatId, after);
+  return db.prepare(`SELECT m.*, u.nickname AS sender_name FROM messages m
+    JOIN users u ON u.id = m.sender_id
+    WHERE m.chat_id=? AND m.ts>? ORDER BY m.ts ASC, m.id ASC`).all(chatId, after);
 }
