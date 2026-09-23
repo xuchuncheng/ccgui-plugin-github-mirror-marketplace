@@ -23,6 +23,7 @@ function connect() {
   socket = io();
   socket.on('connect', () => socket.emit('register', { name: me.nickname }, (res) => {
     if (!res.ok) { alert('昵称被占用:' + res.error); location.reload(); return; }
+    if (current) openChat(current);   // 重连后刷新标题并补拉离线期间的历史
   }));
   socket.on('presence', renderPeople);
   socket.on('message', onMessage);
