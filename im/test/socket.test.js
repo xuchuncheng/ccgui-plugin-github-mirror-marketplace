@@ -46,3 +46,30 @@ test('重名注册第二次被拒', async () => {
   assert.equal(dup.ok, false);
   a.close(); b.close(); await close();
 });
+
+test('单侧发起 dm 时被动方也能实时收到 chat-added 与消息', async () => {
+  const { url, close } = await makeServer();
+  const a = connect(url), b = connect(url);
+  const ackA = await new Promise((r) => a.emit('register', { name: '主动方' }, r));
+  const ackB = await new Promise((r) => b.emit('register', { name: '被动方' }, r));
+  assert.equal(ackA.ok, true);
+  assert.equal(ackB.ok, true);
+
+  // B 全程不调用 dm——先挂好监听，验证被动方在线 socket 被拉入新房间
+  const added = once(b, 'chat-added');
+  const dmA = await new Promise((r) => a.emit('dm', { peerId: ackB.id }, r));
+  assert.equal(dmA.ok, true);
+  const chatId = dmA.chat.id;
+
+  const evt = await added;
+  assert.equal(evt.chat.id, chatId);
+  assert.equal(evt.user.id, ackA.id);
+
+  const got = once(b, 'message');
+  a.emit('message', { chatId, content: '在吗', msgType: 'text' });
+  const msg = await got;
+  assert.equal(msg.content, '在吗');
+  assert.equal(msg.sender_id, ackA.id);
+
+  a.close(); b.close(); await close();
+});

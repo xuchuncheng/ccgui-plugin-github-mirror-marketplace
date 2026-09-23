@@ -43,7 +43,7 @@ export function registerSocket(io, db) {
       for (const c of listChatsForUser(db, uid)) joinChat(c.id);
 
       ack?.({ ok: true, id: uid, nickname: name });
-      io.to(roomOf(grp.id)).emit('joined', { chat: grp.id, user: getUserById(db, uid) });
+      if (grp) io.to(roomOf(grp.id)).emit('joined', { chat: grp.id, user: getUserById(db, uid) });
       broadcastPresence();
     });
 
@@ -61,6 +61,9 @@ export function registerSocket(io, db) {
         addMember(db, chat.id, peerId);
       }
       joinChat(chat.id);
+      for (const s of io.sockets.sockets.values()) {
+        if (s.data.uid === peerId) s.join(roomOf(chat.id));
+      }
       socket.to(roomOf(chat.id)).emit('chat-added', { chat, user: getUserById(db, uid) });
       ack?.({ ok: true, chat });
     });
