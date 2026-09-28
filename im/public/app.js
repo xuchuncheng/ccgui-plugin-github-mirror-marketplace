@@ -6,6 +6,36 @@ let current = null;
 let loading = false;
 const pendingLive = [];
 const rendered = new Set();
+let windowFocused = true;
+window.addEventListener('focus', () => { windowFocused = true; });
+window.addEventListener('blur', () => { windowFocused = false; });
+
+// —— 声音提醒:WebAudio 现场合成一声"叮",无需音频文件,明文 http 可用 ——
+let audioCtx = null;
+let muted = localStorage.getItem('im_muted') === '1';
+function beep() {
+  if (muted) return;
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.type = 'sine'; osc.frequency.setValueAtTime(880, t);
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.18, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+    osc.start(t); osc.stop(t + 0.26);
+  } catch (e) { /* 浏览器不支持或尚未解锁,忽略 */ }
+}
+function renderMuteBtn() { $('muteBtn').textContent = muted ? '🔇' : '🔔'; }
+$('muteBtn').onclick = () => {
+  muted = !muted;
+  localStorage.setItem('im_muted', muted ? '1' : '0');
+  renderMuteBtn();
+  if (!muted) beep();  // 取消静音时响一声作为反馈
+};
 
 $('enter').onclick = login;
 $('nick').addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
@@ -18,7 +48,10 @@ async function login() {
   me = await r.json();
   $('login').classList.add('hidden');
   $('app').classList.remove('hidden');
-  $('me').textContent = '我:' + me.nickname;
+  $('meName').textContent = '我:' + me.nickname;
+  renderMuteBtn();
+  // 借"进入"这次用户手势解锁音频(浏览器自动播放策略要求),否则后台响铃会被拦
+  try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); } catch (e) {}
   connect();
 }
 
@@ -95,6 +128,10 @@ function openChat(id) {
 
 function onMessage(m) {
   if (!chats.has(m.chat_id)) addChat({ id: m.chat_id, type: 'dm', name: '', title: m.sender_name });
+  const isMine = me && m.sender_id === me.id;
+  // "没在看"= 窗口未聚焦/被切到后台,或看的不是这条消息所属的会话 → 响一声提醒
+  const viewingIt = windowFocused && !document.hidden && m.chat_id === current && !loading;
+  if (!isMine && !viewingIt) beep();
   if (m.chat_id === current) {
     if (loading) pendingLive.push(m);
     else addBubble(m);
