@@ -1,0 +1,31 @@
+{
+  "id": "github-mirror-marketplace",
+  "repo": "xuchuncheng/ccgui-plugin-github-mirror-marketplace",
+  "tier": "js",
+  "version": "1.1.0",
+  "minAppVersion": "1.0.6",
+  "sdkVersion": "^0.3",
+  "permissions": [
+    "ui:panel-tab",
+    "ui:center-tab",
+    "ui:sidebar-entry",
+    "ui:command",
+    "storage",
+    "exec:cmd",
+    "exec:node",
+    "exec:powershell",
+    "exec:pwsh",
+    "network:raw.githubusercontent.com",
+    "network:cdn.jsdelivr.net",
+    "network:ghproxy.net",
+    "network:gh-proxy.com",
+    "network:github.com",
+    "network:api.github.com"
+  ],
+  "sha256": {
+    "main.js": "12d2c759f91c026311a98d07b2c4f2926ddf93ba663bb038bd0b5b0fb743cc7c",
+    "manifest.json": "ddff96ee50a7d78b5a652b9b8548253203ddff663aaf633a8d19a14756536c79"
+  },
+  "icon": "docs/icon.svg",
+  "updatedAt": "2026-10-09T00:00:00Z"
+}
