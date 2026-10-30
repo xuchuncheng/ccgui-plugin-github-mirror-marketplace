@@ -9,7 +9,7 @@
 #           切勿使用明文密码（GitHub 已停用密码推送）。
 set -euo pipefail
 REPO="xuchuncheng/ccgui-plugin-github-mirror-marketplace"
-VERSION="1.1.0"
+VERSION="1.1.1"
 : "${GH_TOKEN:?请先 export GH_TOKEN=<你的 GitHub PAT>}"
 
 # 切到仓库根（本脚本在 publish/ 里）
