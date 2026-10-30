@@ -58,7 +58,13 @@ CC GUI → 设置 → 插件 → 从本地目录安装，指向本目录（含 `
 纯逻辑（回退链、状态/结构判定、列表归一化、下载端点构造、注册补丁）抽在 `core.js`，用 `node:test` 单测：
 
 ```bash
-node --test "test/*.test.js"   # 18 项，全绿
+node --test "test/*.test.js"   # 25 项，全绿
 ```
 
 > `main.js` 内联了与 `core.js` 相同的纯函数（运行时禁止 import 外部模块）。改动纯逻辑请两处同步，并以 `core.test.js` 为准。
+
+## 发布（上架官方市场）
+
+发布物料（推送脚本、索引登记文件、上架 PR 片段）属维护工具，**不随本仓库分发**，保存在本地工作区。
+GitHub 仓库：`xuchuncheng/ccgui-plugin-github-mirror-marketplace`，打与 `manifest.version` 相同的
+tag 即触发 `.github/workflows/release.yml` 生成 Release 附件。
