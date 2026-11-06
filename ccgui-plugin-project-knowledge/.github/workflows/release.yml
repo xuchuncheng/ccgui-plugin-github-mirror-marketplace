@@ -1,0 +1,53 @@
+# 发版流水线：tag 必须等于 manifest.json 的 version（无 v 前缀）。
+# 产物由本工作流从 tag 指向的源码打包，禁止手工上传本地产物——市场按 SHA-256 核对。
+name: release
+
+on:
+  push:
+    tags:
+      - "[0-9]*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 校验 manifest
+        run: node scripts/validate-manifest.mjs
+
+      - name: tag 必须等于 manifest version
+        run: |
+          VERSION="$(node -p "require('./manifest.json').version")"
+          if [ "${GITHUB_REF_NAME}" != "$VERSION" ]; then
+            echo "tag ${GITHUB_REF_NAME} != manifest version $VERSION（tag 必须与 version 完全一致，无 v 前缀）"
+            exit 1
+          fi
+
+      - name: 语法与市场门禁自检
+        run: node scripts/validate-bundle.mjs
+
+      - name: 单元测试
+        run: node --test test/core.test.mjs
+
+      - name: 计算 SHA-256
+        run: |
+          sha256sum main.js manifest.json styles.css > checksums.txt
+          cat checksums.txt
+
+      - name: 创建 Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            main.js manifest.json styles.css checksums.txt \
+            --verify-tag \
+            --title "$GITHUB_REF_NAME" \
+            --notes "项目知识 v$GITHUB_REF_NAME：笔记 / 待办 / 计划挂载进对话上下文，按会话隔离。产物由本工作流从 tag 源码打包，附 SHA-256 校验清单。"

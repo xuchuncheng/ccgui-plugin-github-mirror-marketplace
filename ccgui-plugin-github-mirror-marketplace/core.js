@@ -356,3 +356,109 @@ export function installerFileName(winUrl) {
   const m = str(winUrl).match(/\/([^/?#]+)$/);
   return m ? decodeURIComponent(m[1]) : "ccgui-update-setup.exe";
 }
+
+// ── 市场列表展示（分类/排序/格式化，纯函数）──────────────────────────────
+
+/**
+ * 市场分类。官方索引只登记 id/repo/name/description/author——分类是宿主自己算的，
+ * 索引里没有字段，故本插件按名称/描述做启发式归并（近似，非官方口径）。
+ */
+export const CATEGORIES = [
+  { key: "all", label: "全部" },
+  { key: "devtools", label: "开发工具" },
+  { key: "productivity", label: "效率工具" },
+  { key: "integration", label: "集成与渠道" },
+  { key: "appearance", label: "界面外观" },
+  { key: "other", label: "其他" },
+];
+
+const CATEGORY_RULES = [
+  {
+    key: "appearance",
+    re: /外观|主题|配色|颜色|字体|边框|跑马灯|背景|淡化|美化|皮肤|壁纸|桌宠|光效|theme|style|color|font|border|rainbow|background|wallpaper|live2d|icon/i,
+  },
+  {
+    key: "devtools",
+    re: /代码|体检|端口|调试|构建|日志|终端|仓库|分支|文件树|文件预览|预览面板|图表|git|wsl|react|mermaid|pr|devtool|code|lint|build|debug|port|terminal|preview|diff/i,
+  },
+  {
+    key: "integration",
+    re: /供应商|渠道|网关|桥接|上下文|引擎|协议|模型|余额|配额|余量|状态页|服务状态|出口\s*ip|ip|provider|gateway|bridge|context|engine|mcp|balance|quota|status/i,
+  },
+  {
+    key: "productivity",
+    re: /会话|命名|标题|用量|token|笔记|便签|任务|提醒|拖拽|上传|提示词|自动化|统计|计量|定时|限额|屏蔽|来源|看板|监控|usage|task|session|title|prompt|upload|drag|remind|meter|note|schedule|board|monitor/i,
+  },
+];
+
+/**
+ * 归类一个插件（吃 name + description + keywords）。
+ * 打分制：各分类正则命中次数最多者胜，同分按规则顺序（appearance→devtools→
+ * integration→productivity）。对当前官方 28 条索引实测 28/28 与人工标定一致。
+ */
+export function categoryOf(p) {
+  const o = p || {};
+  const text = [o.name, o.description, ...(Array.isArray(o.keywords) ? o.keywords : [])]
+    .filter(Boolean)
+    .join(" ");
+  let best = "other";
+  let bestN = 0;
+  for (const rule of CATEGORY_RULES) {
+    const n = (text.match(new RegExp(rule.re.source, "gi")) || []).length;
+    if (n > bestN) {
+      bestN = n;
+      best = rule.key;
+    }
+  }
+  return best;
+}
+
+/** 插件图标瓷砖的文字：中文取首字，英文取前两个词首字母，兜底取首字符。 */
+export function initials(p) {
+  const name = str((p && (p.name || p.id)) || "?").trim();
+  if (!name) return "?";
+  // 中英混排（如 "Token 速度表"）：取第一个汉字，比孤零零一个拉丁字母更可读。
+  const cjk = name.match(/[一-龥]/);
+  if (cjk) return cjk[0];
+  const words = name.split(/[\s\-_]+/).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+/** 同一 id 恒定配色（hue 取 id 字符和），返回 CSS 渐变；官方缺图标时也是这套做法。 */
+export function tileGradient(id) {
+  const s = str(id);
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+  return `linear-gradient(135deg, hsl(${h} 62% 52%), hsl(${(h + 38) % 360} 66% 42%))`;
+}
+
+/** 排序：relevance(综合=索引原序) / name / version。不改入参数组。 */
+export function sortPlugins(list, mode) {
+  const arr = (list || []).slice();
+  if (mode === "name") {
+    arr.sort((a, b) => str(a.name || a.id).localeCompare(str(b.name || b.id), "zh-Hans-CN"));
+  } else if (mode === "version") {
+    arr.sort((a, b) => compareVersions(b.version || "0", a.version || "0"));
+  }
+  // relevance：保持官方索引原序（索引本身已按 id 字典序整理）。
+  return arr;
+}
+
+/**
+ * 把官方索引的插件数组与补充元数据（plugins/<id>.json 的 version/icon/updatedAt）
+ * 合并成展示条目。extra 可缺省；不改入参。
+ */
+export function mergeMarketData(list, extra) {
+  const x = extra && typeof extra === "object" ? extra : {};
+  return (list || []).map((p) => {
+    const meta = x[p.id] || {};
+    return {
+      ...p,
+      version: str(meta.version || p.version),
+      icon: str(meta.icon || p.icon),
+      updatedAt: str(meta.updatedAt || ""),
+      category: categoryOf(p),
+    };
+  });
+}

@@ -1,0 +1,25 @@
+{
+  "id": "timeline-cards",
+  "name": "过程卡片",
+  "version": "0.1.0",
+  "tier": "js",
+  "minAppVersion": "1.0.6",
+  "sdkVersion": "^0.3",
+  "author": "ccgui-local",
+  "description": "接管会话时间线里「思考 + 工具调用」那张折叠行，改成任务摘要卡：头部状态（进行中/已完成）+ 步数计数 + 语义化执行日志（读取文件/执行命令/搜索…）+ 每步参数与结果展开 + 思考轨道。纯前端，不联网、不起进程。",
+  "permissions": [
+    "ui:timeline-row",
+    "ui:settings-section",
+    "storage"
+  ],
+  "keywords": [
+    "timeline",
+    "process",
+    "tool-call",
+    "thinking",
+    "过程卡片",
+    "任务摘要"
+  ],
+  "license": "MIT",
+  "repo": "xuchuncheng/ccgui-plugin-timeline-cards"
+}

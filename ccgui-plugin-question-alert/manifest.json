@@ -1,0 +1,18 @@
+{
+  "id": "question-alert",
+  "name": "会话提醒",
+  "version": "0.8.0",
+  "tier": "js",
+  "description": "会话提醒的模板化投递：完成 / 错误 / 提问三类事件各有开关，标题与正文可用 {project_name} {worktree} {branch} {session_name} {agent_name} {model_name} {last_message} 七个变量自定义。聚焦时走应用内卡片（跟随主题 token，明暗自适应），失焦时走系统 Toast（同一份模板改写，点击仍可跳回会话）。设置页可发送测试通知验证整条链路。",
+  "author": "ccgui-local",
+  "minAppVersion": "1.0.0",
+  "permissions": [
+    "storage",
+    "ui:settings-section",
+    "host:session",
+    "events",
+    "workspace.metadata.read"
+  ],
+  "repo": "xuchuncheng/ccgui-plugin-question-alert",
+  "license": "MIT"
+}

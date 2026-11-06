@@ -20,7 +20,7 @@ error sending request for url ...
 
 ## 本插件做什么
 
-在右侧新增「社区市场」面板，**另起一条弹性抓取链**把同一份 `community-plugins.json` 抓到手并展示，绕开内置那次失败：
+新增「社区市场」中心页签，**另起一条弹性抓取链**把同一份 `community-plugins.json` 抓到手并展示，绕开内置那次失败：
 
 1. **备用地址自动回退**（任一拿到「2xx + JSON 可解析 + 结构像清单」即停，其余静默跳过并记录原因）：
    - 主：`https://raw.githubusercontent.com/.../community-plugins.json`
@@ -37,9 +37,14 @@ error sending request for url ...
 - 下载/写盘依赖系统 `powershell`（Windows 自带）。非 Windows 需改用对应命令。
 - 所有文件内容与路径均以 **base64 经环境变量**传入 PowerShell 脚本再解码，绝不拼进命令行 → 无命令注入。
 
+## 其他功能
+
+- **客户端更新镜像检查**：宿主内置"检查更新"直连 github.com（国内必超时）。本插件在同一面板用镜像链读取 updater 的 latest.json，发现新版可一键经镜像**断点续传**下载官方安装包到 `~/.ccgui-next/downloads/`，由你双击安装（不静默安装）。
+- **内置市场页引导卡（默认关闭）**：设置项「内置市场页引导卡」开启后，才会在内置市场加载失败处注入一张跳转引导卡（该功能读取宿主界面文本定位，故默认关、需显式开启）。
+
 ## 权限
 
-- `ui:panel-tab`：注册右侧「社区市场」标签页。
+- `ui:center-tab` / `ui:sidebar-entry` / `ui:command`：注册「社区市场」中心页签、侧边栏入口与刷新命令。
 - `storage`：缓存插件列表与镜像偏好到插件私有 KV。
 - `exec:powershell`：写入本地插件目录、备份并改写 `plugins.json`（仅安装动作触发）。
 
@@ -60,6 +65,6 @@ node --test "test/*.test.js"   # 25 项，全绿
 
 ## 发布（上架官方市场）
 
-发布物料在 `publish/` 目录（推送脚本、索引登记文件、上架 PR 片段），流程见 `publish/README.md`。
-GitHub 仓库：`xuchuncheng/ccgui-plugin-github-mirror-marketplace`。
-
+发布物料（推送脚本、索引登记文件、上架 PR 片段）属维护工具，**不随本仓库分发**，保存在本地工作区。
+GitHub 仓库：`xuchuncheng/ccgui-plugin-github-mirror-marketplace`，打与 `manifest.version` 相同的
+tag 即触发 `.github/workflows/release.yml` 生成 Release 附件。

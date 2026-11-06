@@ -1,0 +1,58 @@
+/* 会话提醒 · 侧栏扫光样式（v0.7.0）
+
+   宿主把本文件包进 @layer ccgui-plugins（声明在 Tailwind 工具层之前），
+   与宿主 hover/选中背景同权重时会输——用 !important 保证扫光压过宿主底色。
+
+   0.7.0 起颜色全部走宿主语义 token（theme.css）：
+   - --color-accent-500 / accent-400：扫光的主色，随宿主强调色走；
+   - color-mix() 现场调透明度，明暗两套主题都用同一份声明，
+     宿主 .dark 一翻转扫光自动变暗，不再有硬编码的紫色。
+
+   跑马灯做法：底色为稳定的淡强调色，上面叠一道更亮的强调色光带，
+   用 background-position 横向循环平移——一束光从左往右扫过整行。
+   不用伪元素 ::before（宿主行内结构未知，可能被 overflow 裁掉）。
+
+   定位不依赖 pl-9 / data-tab-key 之类构建相关的选择器，只认插件自己加的两个类：
+   - .ccgui-qa-marquee：侧栏会话行 / 顶部标签页（强提醒，扫光）；
+   - .ccgui-qa-group：折叠工作区头行（弱提醒，淡底 + 左缘色条）。
+
+   卡片本身的样式在 main.js 的 SELF_CSS 里（运行时自注入，热更新即时生效）。 */
+
+.ccgui-qa-marquee {
+  background-color: color-mix(in srgb, var(--color-accent-500, #2f7df6) 9%, transparent) !important;
+  background-image: linear-gradient(
+    100deg,
+    transparent 0%,
+    transparent 32%,
+    color-mix(in srgb, var(--color-accent-400, #3392ff) 36%, transparent) 50%,
+    transparent 68%,
+    transparent 100%
+  ) !important;
+  background-size: 240% 100% !important;
+  background-repeat: no-repeat !important;
+  animation: ccgui-qa-marquee 2.6s ease-in-out infinite !important;
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--color-accent-500, #2f7df6) 65%, transparent);
+}
+
+@keyframes ccgui-qa-marquee {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
+}
+
+.ccgui-qa-group {
+  background-color: color-mix(in srgb, var(--color-accent-500, #2f7df6) 11%, transparent) !important;
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--color-accent-500, #2f7df6) 55%, transparent);
+}
+
+/* 尊重"减少动态效果"的系统偏好：不扫，只留一层稳定的淡底。 */
+@media (prefers-reduced-motion: reduce) {
+  .ccgui-qa-marquee {
+    animation: none !important;
+    background-image: none !important;
+    background-color: color-mix(in srgb, var(--color-accent-500, #2f7df6) 16%, transparent) !important;
+  }
+}

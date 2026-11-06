@@ -16,6 +16,12 @@ import {
   buildUpdaterEndpoints,
   buildInstallerEndpoints,
   installerFileName,
+  CATEGORIES,
+  categoryOf,
+  initials,
+  tileGradient,
+  sortPlugins,
+  mergeMarketData,
   PRIMARY_URL,
   FALLBACK_URL,
   DEFAULT_MIRROR_PREFIXES,
@@ -263,4 +269,54 @@ test("buildInstallerEndpoints + installerFileName", () => {
   assert.ok(eps[0].startsWith("https://ghproxy.net/"));
   assert.ok(eps.includes(winUrl));
   assert.equal(installerFileName(winUrl), "CC.GUI_1.1.0_x64-setup.exe");
+});
+
+// ── 市场展示：分类 / 安装量 / 图标 / 排序 / 合并 ─────────────────────────
+test("initials：中文取首字，英文取词首字母", () => {
+  assert.equal(initials({ name: "会话自动命名" }), "会");
+  assert.equal(initials({ name: "React Doctor" }), "RD");
+  assert.equal(initials({ name: "wsl" }), "WS");
+  assert.equal(initials({}), "?");
+});
+
+test("tileGradient：同 id 恒定，不同 id 不同", () => {
+  assert.equal(tileGradient("abc"), tileGradient("abc"));
+  assert.notEqual(tileGradient("abc"), tileGradient("xyz"));
+  assert.ok(tileGradient("abc").startsWith("linear-gradient"));
+});
+
+test("categoryOf：按名称/描述归类", () => {
+  assert.equal(categoryOf({ name: "彩虹跑马灯边界线", description: "输入框边框效果" }), "appearance");
+  assert.equal(categoryOf({ name: "React Doctor", description: "代码体检" }), "devtools");
+  assert.equal(categoryOf({ name: "余额与余量", description: "供应商与计费" }), "integration");
+  assert.equal(categoryOf({ name: "会话自动命名", description: "每轮对话生成标题" }), "productivity");
+  assert.equal(categoryOf({ name: "某个怪东西", description: "说不清" }), "other");
+});
+
+test("module CATEGORIES：含全部/五个分类，key 唯一", () => {
+  const keys = CATEGORIES.map((c) => c.key);
+  assert.equal(keys[0], "all");
+  assert.equal(new Set(keys).size, keys.length);
+  for (const k of ["devtools", "productivity", "integration", "appearance", "other"]) {
+    assert.ok(keys.includes(k), k);
+  }
+});
+
+test("sortPlugins：name 按名称、version 按版本降序，不改入参", () => {
+  const list = [
+    { id: "a", name: "乙", version: "1.0.0" },
+    { id: "b", name: "甲", version: "2.0.0" },
+  ];
+  assert.equal(sortPlugins(list, "version")[0].id, "b");
+  assert.equal(list[0].id, "a");
+  assert.deepEqual(sortPlugins(list, "relevance").map((x) => x.id), ["a", "b"]);
+  assert.equal(sortPlugins(list, "name").length, 2);
+});
+test("mergeMarketData：补 version/icon/category", () => {
+  const list = [{ id: "x", name: "余额与余量", description: "供应商网关余额" }];
+  const merged = mergeMarketData(list, { x: { version: "0.4.0", icon: "docs/icon.png" } });
+  assert.equal(merged[0].version, "0.4.0");
+  assert.equal(merged[0].icon, "docs/icon.png");
+  assert.equal(merged[0].category, "integration");
+  assert.deepEqual(mergeMarketData(null), []);
 });

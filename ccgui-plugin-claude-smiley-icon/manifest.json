@@ -1,0 +1,12 @@
+{
+  "id": "claude-smiley-icon",
+  "name": "Claude 笑脸图标 + XoCodeX",
+  "version": "1.5.0",
+  "minAppVersion": "1.0.0",
+  "description": "把 Claude Code 品牌标换成笑脸、文字换成 XoCodeX，隐藏侧栏会话行与顶部会话页签左侧的引擎图标，并把输入框底栏精简成「中国国旗 + 模型 · 思考等级」。",
+  "author": "dijia",
+  "repo": "xuchuncheng/ccgui-plugin-claude-smiley-icon",
+  "tier": "js",
+  "license": "MIT",
+  "permissions": []
+}

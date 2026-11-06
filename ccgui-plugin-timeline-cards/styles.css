@@ -1,0 +1,465 @@
+/* 过程卡片 · 样式
+   宿主把本文件包进 @layer ccgui-plugins（位于 base 之后、utilities 之前），
+   所以这里只写插件自己的类，不写 dark: 分支——深浅色完全跟随宿主语义 token。
+   每条声明都带浅色 fallback：token 意外缺失时退化为可读的浅色外观。
+
+   视觉参照：卡片 = 头部（图标 + 任务摘要 + 状态胶囊 + 计数 + 展开箭头）
+                    + 日志区（执行日志 + 分页 + 每步一行）。 */
+
+.tc-card {
+  margin: 6px 0 10px;
+  border: 1px solid var(--color-border-button-default, #e5e7eb);
+  border-radius: var(--radius-2lg, 10px);
+  background: var(--color-background-primary-default, #ffffff);
+  overflow: hidden;
+  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+}
+
+/* ===== 头部 ============================================================= */
+
+.tc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  background: var(--color-background-secondary-default, #f6f7f9);
+  color: var(--color-text-secondary, #5b6270);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+.tc-head:hover {
+  background: var(--color-background-tertiary-default, #eef0f3);
+  color: var(--color-text-primary, #18191b);
+}
+.tc-head:focus-visible {
+  outline: 2px solid var(--color-border-focus-ring, #3b82f6);
+  outline-offset: -2px;
+}
+
+.tc-head-main {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+}
+.tc-head-icon {
+  display: inline-flex;
+  color: var(--color-text-tertiary, #98a0ad);
+  flex: none;
+}
+.tc-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text-primary, #18191b);
+  flex: none;
+}
+
+.tc-chip {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.6;
+  border: 1px solid transparent;
+}
+.tc-chip-live {
+  color: var(--color-accent-600, #2563eb);
+  background: color-mix(in srgb, var(--color-accent-500, #3b82f6) 14%, transparent);
+  border-color: color-mix(in srgb, var(--color-accent-500, #3b82f6) 26%, transparent);
+}
+.tc-chip-done {
+  color: var(--color-text-tertiary, #98a0ad);
+  background: color-mix(in srgb, var(--color-text-tertiary, #98a0ad) 12%, transparent);
+}
+.tc-chip-error {
+  color: var(--color-text-error-primary, #d14343);
+  background: color-mix(in srgb, var(--color-border-error-default, #e5484d) 12%, transparent);
+}
+
+/* 折叠时的一行预览：夹在标题和计数之间，允许收缩、只截自己。 */
+.tc-preview {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--color-text-tertiary, #98a0ad);
+}
+.tc-preview-verb {
+  flex: none;
+  color: var(--color-text-secondary, #5b6270);
+}
+.tc-preview-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tc-head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+.tc-count {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-tertiary, #98a0ad);
+}
+.tc-chevron {
+  display: inline-flex;
+  color: var(--color-text-tertiary, #98a0ad);
+  transition: transform 180ms ease;
+}
+.tc-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+/* ===== 展开/收起：grid 行高过渡（不写 scaleY，避免合成层残影） ====== */
+
+.tc-clip {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms ease-out;
+}
+.tc-clip.is-open {
+  grid-template-rows: 1fr;
+}
+.tc-clip-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tc-body {
+  padding: 8px 12px 10px;
+}
+
+/* ===== 日志区 =========================================================== */
+
+.tc-logbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 6px;
+}
+.tc-loglabel {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--color-text-tertiary, #98a0ad);
+}
+.tc-pager {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tc-page-btn {
+  padding: 1px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary, #5b6270);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.tc-page-btn:hover:not(:disabled) {
+  background: var(--color-background-tertiary-hover, #e3e6ea);
+}
+.tc-page-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.tc-page-range {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-tertiary, #98a0ad);
+}
+
+.tc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* 每步一行 */
+.tc-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  margin: 0 -6px;
+}
+.tc-row:hover {
+  background: var(--color-background-secondary-default, #f6f7f9);
+}
+
+.tc-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 18px;
+  flex: none;
+}
+.tc-ico-done {
+  color: var(--color-notification-success-foreground, #4d7c0f);
+}
+.tc-ico-error {
+  color: var(--color-text-error-primary, #d14343);
+}
+.tc-ico-run {
+  color: var(--color-accent-500, #3b82f6);
+  animation: tc-pulse 1.4s ease-in-out infinite;
+}
+@keyframes tc-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-ico-run { animation: none; opacity: 0.9; }
+  .tc-clip { transition: none; }
+}
+
+.tc-row-main {
+  min-width: 0;
+  flex: 1;
+}
+.tc-row-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.tc-verb {
+  flex: none;
+  color: var(--color-text-secondary, #5b6270);
+  font-weight: 500;
+}
+.tc-primary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-primary, #18191b);
+}
+.tc-stat {
+  flex: none;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.tc-stat-add {
+  color: var(--color-notification-success-foreground, #4d7c0f);
+}
+.tc-stat-del {
+  color: var(--color-text-error-primary, #d14343);
+}
+
+.tc-args-btn {
+  flex: none;
+  margin-left: auto;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text-tertiary, #98a0ad);
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+.tc-row:hover .tc-args-btn,
+.tc-args-btn[aria-expanded="true"] {
+  opacity: 1;
+}
+.tc-args-btn:hover {
+  background: var(--color-background-tertiary-default, #eef0f3);
+  color: var(--color-text-secondary, #5b6270);
+}
+.tc-args-btn:focus-visible {
+  opacity: 1;
+  outline: 1px solid var(--color-border-focus-ring, #3b82f6);
+}
+
+.tc-secondary {
+  margin-top: 1px;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--color-text-tertiary, #98a0ad);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tc-payload {
+  margin: 6px 0 2px;
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border-button-default, #e5e7eb);
+  border-radius: 8px;
+  background: var(--color-background-secondary-default, #f6f7f9);
+  color: var(--color-text-secondary, #5b6270);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* 思考段落：左轨道灰文，默认只露首行 */
+.tc-think {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px 6px 4px;
+  margin: 0 -6px;
+}
+.tc-think-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-tertiary, #98a0ad);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  text-align: left;
+}
+.tc-think-head:hover {
+  color: var(--color-text-secondary, #5b6270);
+}
+.tc-think-ico {
+  display: inline-flex;
+  flex: none;
+}
+.tc-think-title {
+  flex: none;
+}
+.tc-think-more {
+  flex: none;
+  opacity: 0.7;
+}
+.tc-think-body {
+  margin-left: 19px;
+  padding-left: 10px;
+  border-left: 1px solid var(--color-border-button-default, #e5e7eb);
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--color-text-tertiary, #98a0ad);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tc-empty {
+  padding: 6px 0;
+  font-size: 11.5px;
+  color: var(--color-text-tertiary, #98a0ad);
+}
+
+/* ===== 设置页 =========================================================== */
+
+.tc-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 2px 10px;
+  font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+}
+.tc-set-title {
+  margin: 0 0 2px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary, #18191b);
+}
+.tc-set-sub {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--color-text-tertiary, #98a0ad);
+}
+.tc-set-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.tc-set-row:hover {
+  background: var(--color-background-secondary-default, #f6f7f9);
+}
+.tc-set-row-num {
+  cursor: default;
+  align-items: center;
+  justify-content: space-between;
+}
+.tc-set-row input[type="checkbox"] {
+  margin-top: 2px;
+  accent-color: var(--color-accent-600, #2563eb);
+}
+.tc-set-row input[type="number"] {
+  width: 74px;
+  padding: 3px 6px;
+  border: 1px solid var(--color-border-button-default, #e5e7eb);
+  border-radius: 6px;
+  background: var(--color-background-primary-default, #ffffff);
+  color: var(--color-text-primary, #18191b);
+  font: inherit;
+  font-size: 12px;
+}
+.tc-set-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.tc-set-label {
+  font-size: 12.5px;
+  color: var(--color-text-primary, #18191b);
+}
+.tc-set-desc {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--color-text-tertiary, #98a0ad);
+}
+.tc-set-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px 0;
+}
+.tc-reset {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border-button-default, #e5e7eb);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text-secondary, #5b6270);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.tc-reset:hover {
+  border-color: var(--color-border-button-hover, #cfd4db);
+  color: var(--color-text-primary, #18191b);
+}
+.tc-saved {
+  font-size: 11.5px;
+  color: var(--color-notification-success-foreground, #4d7c0f);
+}

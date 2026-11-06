@@ -1,0 +1,21 @@
+{
+  "id": "api-summary",
+  "name": "会话 API 汇总",
+  "version": "0.1.0",
+  "tier": "js",
+  "description": "右键会话「汇总API」：让 AI 梳理会话涉及的接口，登记到 docs/apis.xlsx（接口编码/URL/Controller/请求方式/含义/简要描述/归属任务/备注），并按接口生成含业务流程图·表数据流转图·业务时序图的 Mermaid 校验文档；两段提示词均可自定义。",
+  "author": "ccgui-local",
+  "minAppVersion": "1.0.6",
+  "sdkVersion": ">=0.3.5",
+  "license": "MIT",
+  "permissions": [
+    "ui:session-menu",
+    "ui:settings-section",
+    "host:session",
+    "workspace.metadata.read",
+    "composer:draft",
+    "storage",
+    "events"
+  ],
+  "repo": "xuchuncheng/ccgui-plugin-api-summary"
+}

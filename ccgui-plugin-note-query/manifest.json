@@ -1,0 +1,22 @@
+{
+  "id": "note-query",
+  "name": "便签会话查询",
+  "version": "0.2.0",
+  "tier": "js",
+  "sdkVersion": "^0.3",
+  "minAppVersion": "1.0.6",
+  "author": "IM Builder",
+  "description": "给会话贴结构化便签（标题/时间/业务/归属模块/详情），集中存于 ~/.ccgui-next/plugin-data/note-query，按工作区标签加载；归属工作区经宿主 app.db 权威解析，支持检索/筛选/跨工作区移动，点击便签定位并高亮左侧会话。",
+  "permissions": [
+    "ui:session-menu",
+    "ui:panel-tab",
+    "ui:overlay",
+    "host:session",
+    "exec:python3",
+    "theme",
+    "events",
+    "workspace.metadata.read"
+  ],
+  "repo": "xuchuncheng/ccgui-plugin-note-query",
+  "license": "MIT"
+}

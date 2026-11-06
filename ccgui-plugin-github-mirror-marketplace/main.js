@@ -271,6 +271,69 @@ function installerFileName(winUrl) {
   return m ? decodeURIComponent(m[1]) : "ccgui-update-setup.exe";
 }
 
+// ── 市场展示（与 core.js 同步）：分类/安装量/图标/排序/合并 ──────────────
+const CATEGORIES = [
+  { key: "all", label: "全部" },
+  { key: "devtools", label: "开发工具" },
+  { key: "productivity", label: "效率工具" },
+  { key: "integration", label: "集成与渠道" },
+  { key: "appearance", label: "界面外观" },
+  { key: "other", label: "其他" },
+];
+const CATEGORY_RULES = [
+  { key: "appearance", re: /外观|主题|配色|颜色|字体|边框|跑马灯|背景|淡化|美化|皮肤|壁纸|桌宠|光效|theme|style|color|font|border|rainbow|background|wallpaper|live2d|icon/i },
+  { key: "devtools", re: /代码|体检|端口|调试|构建|日志|终端|仓库|分支|文件树|文件预览|预览面板|图表|git|wsl|react|mermaid|pr\b|devtool|code|lint|build|debug|port|terminal|preview|diff/i },
+  { key: "integration", re: /供应商|渠道|网关|桥接|上下文|引擎|协议|模型|余额|配额|余量|状态页|服务状态|出口\s*ip|\bip\b|provider|gateway|bridge|context|engine|mcp|balance|quota|status/i },
+  { key: "productivity", re: /会话|命名|标题|用量|token|笔记|便签|任务|提醒|拖拽|上传|提示词|自动化|统计|计量|定时|限额|屏蔽|来源|看板|监控|usage|task|session|title|prompt|upload|drag|remind|meter|note|schedule|board|monitor/i },
+];
+
+function categoryOf(p) {
+  const o = p || {};
+  const text = [o.name, o.description, ...(Array.isArray(o.keywords) ? o.keywords : [])].filter(Boolean).join(" ");
+  let best = "other", bestN = 0;
+  for (const rule of CATEGORY_RULES) {
+    const n = (text.match(new RegExp(rule.re.source, "gi")) || []).length;
+    if (n > bestN) { bestN = n; best = rule.key; }
+  }
+  return best;
+}
+
+function initials(p) {
+  const name = str((p && (p.name || p.id)) || "?").trim();
+  if (!name) return "?";
+  // 中英混排（如 "Token 速度表"）：取第一个汉字，比孤零零一个拉丁字母更可读。
+  const cjk = name.match(/[一-龥]/);
+  if (cjk) return cjk[0];
+  const words = name.split(/[\s\-_]+/).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+function tileGradient(id) {
+  const s = str(id);
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+  return `linear-gradient(135deg, hsl(${h} 62% 52%), hsl(${(h + 38) % 360} 66% 42%))`;
+}
+function sortPlugins(list, mode) {
+  const arr = (list || []).slice();
+  if (mode === "name") arr.sort((a, b) => str(a.name || a.id).localeCompare(str(b.name || b.id), "zh-Hans-CN"));
+  else if (mode === "version") arr.sort((a, b) => compareVersions(b.version || "0", a.version || "0"));
+  return arr;
+}
+function mergeMarketData(list, extra) {
+  const x = extra && typeof extra === "object" ? extra : {};
+  return (list || []).map((p) => {
+    const meta = x[p.id] || {};
+    return {
+      ...p,
+      version: str(meta.version || p.version),
+      icon: str(meta.icon || p.icon),
+      updatedAt: str(meta.updatedAt || ""),
+      category: categoryOf(p),
+    };
+  });
+}
+
 // ══ 宿主适配层 ══════════════════════════════════════════════════════════
 function sanitizeId(id) {
   return str(id).replace(/[^\w.-]/g, "_") || "unnamed";
@@ -291,7 +354,9 @@ export default function activate(ctx) {
   // 真实签名：{ method, url, headers, body } → 返回 { status, body }。
   // 没有 timeoutMs/version 字段（多传会被 deny_unknown_fields 拒），超时只能在 JS 侧
   // 用 Promise.race 自己做（与官方 claude-ip-check 同款）。UA 仍按要求带上。
-  async function http(url) {
+  // 单次请求，带 1 次重试：ghproxy 这类公共镜像偶发 000/超时（实测同 URL
+  // 隔一秒再打就 200），单次失败不该让整个元数据缺失。
+  async function httpOnce(url) {
     let timer;
     try {
       const p = ctx.bridge.invoke("plugin_http_request", {
@@ -307,6 +372,14 @@ export default function activate(ctx) {
       return normalizeResp(r);
     } finally {
       if (timer) clearTimeout(timer);
+    }
+  }
+  async function http(url) {
+    try {
+      return await httpOnce(url);
+    } catch (e) {
+      await new Promise((r) => setTimeout(r, 350));
+      return await httpOnce(url);
     }
   }
   // bridge 返回 {status, body}；容错几种变体，归一成 {status, body}。
@@ -461,6 +534,8 @@ export default function activate(ctx) {
   // ── 状态 ────────────────────────────────────────────────────────────
   const S = {
     plugins: [],
+    extraMeta: {}, // id -> {version, icon}
+    installed: {}, // id -> 已装版本（读 ~/.ccgui-next/plugins.json）
     endpointHit: "",
     errors: [],
     loading: false,
@@ -469,6 +544,11 @@ export default function activate(ctx) {
     mirrors: DEFAULT_MIRROR_PREFIXES.slice(),
     expandedId: "",
     installing: {}, // id -> {busy,msg}
+    metaLoading: false, // 版本/图标后台补充中
+    cat: "all", // 当前分类
+    showSettings: false, // 是否展开设置区
+    sort: "relevance", // 排序
+    query: "", // 搜索
     upd: { checking: false, downloading: false, msg: "", latest: "", current: "", notes: "", winUrl: "", downloaded: "" },
   };
 
@@ -492,6 +572,7 @@ export default function activate(ctx) {
       const c = await ctx.storage.get("cache");
       if (c && Array.isArray(c.plugins)) {
         S.plugins = c.plugins;
+        if (c.extraMeta && typeof c.extraMeta === "object") S.extraMeta = c.extraMeta;
         S.endpointHit = c.endpointHit || "(离线缓存)";
         S.notice = "显示的是上次成功抓取的离线缓存（" + c.plugins.length + " 个插件）。点「刷新」获取最新。";
       }
@@ -501,9 +582,54 @@ export default function activate(ctx) {
   }
   async function saveCache() {
     try {
-      await ctx.storage.set("cache", { plugins: S.plugins, endpointHit: S.endpointHit });
+      await ctx.storage.set("cache", { plugins: S.plugins, extraMeta: S.extraMeta, endpointHit: S.endpointHit });
     } catch (e) {
       /* 忽略 */
+    }
+  }
+
+  // 官方索引根的补充元数据 plugins/<id>.json（version/icon/updatedAt，一插件一文件）。
+  // 都走同一镜像链；失败只让该字段留空，绝不阻塞列表渲染。
+  // （安装量 download-counts.json 不再使用，见 v1.2.1。）
+  const INDEX_ROOT = "https://raw.githubusercontent.com/zhukunpenglinyutong/ccgui-plugins/main";
+  const META_CONCURRENCY = 6;
+  function metaEndpoints(rel) {
+    return buildInstallerEndpoints(INDEX_ROOT + "/" + rel, { mirrorPrefixes: S.mirrors });
+  }
+  async function loadMarketMeta() {
+    // 每插件登记：并发上限 6，失败的留空（列表照常展示）。
+    const todo = S.plugins.filter((p) => !S.extraMeta[p.id]);
+    let cursor = 0;
+    async function worker() {
+      while (cursor < todo.length) {
+        const p = todo[cursor++];
+        try {
+          const r = await fetchFirstText(http, metaEndpoints("plugins/" + encodeURIComponent(p.id) + ".json"));
+          if (r.ok) {
+            const j = JSON.parse(r.text);
+            S.extraMeta[p.id] = { version: str(j.version), icon: str(j.icon), updatedAt: str(j.updatedAt) };
+          }
+        } catch (e) {
+          /* 单个失败忽略 */
+        }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(META_CONCURRENCY, todo.length) }, worker));
+  }
+
+  // 读本机已装插件（~/.ccgui-next/plugins.json），用于列表区分「已安装 / 可更新」。
+  // 失败一律静默：读不到就当作全未安装，不打断浏览。
+  async function loadInstalled() {
+    try {
+      const j = await readPluginsJson();
+      const out = {};
+      const ps = (j && j.plugins) || {};
+      for (const [id, v] of Object.entries(ps)) {
+        if (v && v.enabled !== false && v.quarantined !== true) out[id] = str(v.version);
+      }
+      S.installed = out;
+    } catch (e) {
+      S.installed = {};
     }
   }
 
@@ -525,8 +651,21 @@ export default function activate(ctx) {
         S.plugins = r.data;
         S.endpointHit = r.endpoint;
         S.errors = r.errors;
-        await saveCache();
         S.notice = "已从 " + prettyEndpoint(r.endpoint) + " 抓取 " + r.data.length + " 个插件。";
+        // 列表到手就结束 loading（版本/图标是锦上添花，不该让整页卡在"抓取中"）。
+        S.loading = false;
+        render();
+        S.metaLoading = true;
+        Promise.all([loadMarketMeta(), loadInstalled()])
+          .then(() => {
+            S.metaLoading = false;
+            render();
+            saveCache();
+          })
+          .catch(() => {
+            S.metaLoading = false;
+            render();
+          });
       }
     } catch (e) {
       S.error = String((e && e.message) || e);
@@ -586,6 +725,8 @@ export default function activate(ctx) {
         msg: "✅ 已安装到 " + out.replace(/^OK\|/, "") + "。" + (hit.join("，") || "") +
           " 若未即时生效，请重启/重载 CC GUI 以加载新插件。",
       };
+      await loadInstalled();
+      render();
     } catch (e) {
       S.installing[entry.id] = { busy: false, msg: "❌ " + String((e && e.message) || e) };
     }
@@ -709,8 +850,16 @@ export default function activate(ctx) {
     if (/ghproxy|gh-proxy/.test(u)) return "镜像 " + u.split("/")[2];
     return u.replace(/^https:\/\//, "").slice(0, 40);
   }
-  const BTN =
-    "select-none cursor-pointer rounded px-2 py-1 text-xs border border-neutral-500/40 hover:bg-neutral-500/15";
+  // 与宿主同风格：中性 token + 深浅色自动翻转，禁用写死 hex。
+  const T = {
+    btn: "select-none whitespace-nowrap cursor-pointer rounded-md px-2.5 py-1 text-xs border border-neutral-500/30 hover:bg-neutral-500/15 disabled:opacity-50 disabled:cursor-not-allowed",
+    btnPrimary: "select-none whitespace-nowrap cursor-pointer rounded-md px-3 py-1 text-xs font-medium bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed",
+    chip: "select-none cursor-pointer rounded-full px-3 py-1 text-xs whitespace-nowrap",
+    chipOn: "bg-neutral-500/25 text-neutral-900 dark:text-neutral-50 font-medium",
+    chipOff: "text-neutral-500 dark:text-neutral-400 hover:bg-neutral-500/10",
+    muted: "text-neutral-500 dark:text-neutral-400",
+  };
+  const BTN = T.btn;
 
   // ── 渲染 ────────────────────────────────────────────────────────────
   let host = null;
@@ -726,39 +875,36 @@ export default function activate(ctx) {
     wrap.style.minHeight = "0";
 
     wrap.appendChild(renderHeader());
-    wrap.appendChild(renderMirrors());
-    wrap.appendChild(renderUpdate());
+    wrap.appendChild(renderTabs());
+    wrap.appendChild(renderToolbar());
 
     if (S.error) {
-      const err = el("div", "mx-3 mt-2 px-2 py-1.5 rounded text-xs bg-red-500/15 text-red-600 dark:text-red-400 whitespace-pre-wrap break-words", S.error);
+      const err = el("div", "mx-4 mt-2 px-3 py-2 rounded-md text-xs bg-red-500/15 text-red-600 dark:text-red-400 whitespace-pre-wrap break-words", S.error);
       wrap.appendChild(err);
     }
     if (S.notice)
-      wrap.appendChild(el("div", "mx-3 mt-2 px-2 py-1.5 rounded text-[11px] leading-snug bg-amber-500/10 text-amber-700 dark:text-amber-400", S.notice));
+      wrap.appendChild(el("div", "mx-4 mt-2 px-3 py-2 rounded-md text-[11px] leading-snug bg-amber-500/10 text-amber-700 dark:text-amber-400", S.notice));
 
-    const list = el("div", "flex-1 overflow-auto px-2 py-2");
-    wrap.appendChild(list);
-    if (S.loading) {
-      list.appendChild(el("div", "p-4 text-sm text-neutral-500 dark:text-neutral-400", "抓取中（主→备→镜像 依次尝试）…"));
-      return wrap;
-    }
-    if (!S.plugins.length) {
-      list.appendChild(el("div", "p-4 text-sm text-neutral-500 dark:text-neutral-400", "暂无插件。点右上「刷新」。"));
-      return wrap;
-    }
-    for (const p of S.plugins) list.appendChild(renderCard(p));
+    wrap.appendChild(renderList());
     return wrap;
   }
 
+  // 头部：标题 + 命中端点 + 右侧操作区（设置开关 / 刷新）。
   function renderHeader() {
-    const head = el("div", "px-3 py-2 flex items-center gap-2 border-b border-neutral-500/25");
-    head.appendChild(el("span", "text-sm font-semibold", "社区插件市场"));
-    const ep = el("span", "flex-1 truncate text-[11px] text-neutral-500 dark:text-neutral-400", S.endpointHit ? "命中：" + prettyEndpoint(S.endpointHit) : "尚未抓取");
+    const head = el("div", "px-4 pt-3 pb-2 flex items-center gap-3");
+    const title = el("span", "text-base font-semibold", "社区插件市场");
+    head.appendChild(title);
+    const ep = el("span", "flex-1 truncate text-[11px] " + T.muted, S.endpointHit ? "命中：" + prettyEndpoint(S.endpointHit) : "尚未抓取");
     ep.title = S.endpointHit || "";
     head.appendChild(ep);
-    const cnt = el("span", "shrink-0 text-[11px] text-neutral-500 dark:text-neutral-400", S.plugins.length ? S.plugins.length + " 个" : "");
-    head.appendChild(cnt);
-    const rf = el("button", BTN, S.loading ? "抓取中…" : "刷新");
+    const gear = el("button", T.btn + " flex items-center gap-1", (S.showSettings ? "收起设置" : "设置"));
+    gear.type = "button";
+    gear.onclick = () => {
+      S.showSettings = !S.showSettings;
+      render();
+    };
+    head.appendChild(gear);
+    const rf = el("button", T.btn, S.loading ? "抓取中…" : S.metaLoading ? "补全中…" : "刷新");
     rf.type = "button";
     rf.disabled = S.loading;
     rf.onclick = refresh;
@@ -766,16 +912,243 @@ export default function activate(ctx) {
     return head;
   }
 
+  // 分类页签条：全部 28 · 开发工具 6 · …（计数按当前数据实时算）
+  function renderTabs() {
+    const bar = el("div", "px-4 pb-2 flex items-center gap-4 overflow-x-auto border-b border-neutral-500/15");
+    const mergedAll = mergeMarketData(S.plugins, S.extraMeta);
+    for (const c of CATEGORIES) {
+      const n = c.key === "all" ? mergedAll.length : mergedAll.filter((p) => p.category === c.key).length;
+      const on = S.cat === c.key;
+      const chip = el("button", T.chip + " " + (on ? T.chipOn : T.chipOff), c.label + (n ? " " + n : ""));
+      chip.type = "button";
+      chip.onclick = () => {
+        S.cat = c.key;
+        S.expandedId = "";
+        render();
+      };
+      bar.appendChild(chip);
+    }
+    return bar;
+  }
+
+  // 工具条：排序下拉 + 搜索框（与官方市场同位置）。
+  function renderToolbar() {
+    const bar = el("div", "px-4 py-2 flex items-center gap-2");
+    const sort = el("select", "cursor-pointer rounded-md px-2 py-1 text-xs border border-neutral-500/30 bg-transparent outline-none");
+    for (const [v, label] of [["relevance", "综合排序"], ["name", "名称"], ["version", "版本"]]) {
+      const o = el("option", "", label);
+      o.value = v;
+      if (S.sort === v) o.selected = true;
+      sort.appendChild(o);
+    }
+    sort.onchange = () => {
+      S.sort = sort.value;
+      render();
+    };
+    bar.appendChild(sort);
+
+    const search = el("input", "flex-1 max-w-xs ml-auto px-2.5 py-1 text-xs rounded-md border border-neutral-500/30 bg-transparent outline-none placeholder:text-neutral-500");
+    search.type = "text";
+    search.spellcheck = false;
+    search.placeholder = "搜索插件...";
+    search.value = S.query;
+    search.oninput = () => {
+      S.query = search.value;
+      render();
+    };
+    bar.appendChild(search);
+
+    if (S.showSettings) {
+      const settings = el("div", "px-4 pb-2 space-y-2");
+      settings.appendChild(renderMirrors());
+      settings.appendChild(renderUpdate());
+      bar.appendChild(settings);
+      bar.className += " flex-wrap";
+    }
+    return bar;
+  }
+
+  // 当前分类 + 搜索命中的条目（已排序）。展示前统一合并安装量/图标/分类。
+  function filtered(extra) {
+    if (extra === null) return [];
+    const q = str(extra).trim().toLowerCase();
+    const merged = mergeMarketData(S.plugins, S.extraMeta);
+    return merged.filter((p) => {
+      if (S.cat !== "all" && (p.category || categoryOf(p)) !== S.cat) return false;
+      if (!q) return true;
+      return [p.name, p.description, p.author, p.id].filter(Boolean).join(" ").toLowerCase().indexOf(q) !== -1;
+    });
+  }
+
+  function renderList() {
+    const box = el("div", "flex-1 overflow-auto px-4 pb-4");
+    if (S.loading && !S.plugins.length) {
+      box.appendChild(el("div", "p-6 text-sm " + T.muted, "抓取中（主 → 备用 → 镜像 依次尝试）…"));
+      return box;
+    }
+    const rows = sortPlugins(filtered(S.query), S.sort);
+    if (!S.plugins.length) {
+      box.appendChild(el("div", "p-6 text-sm " + T.muted, "暂无插件。点右上「刷新」。"));
+      return box;
+    }
+
+    // 圆角列表容器（与官方市场同款：外框大圆角 + 行间细分隔线，无卡片阴影）
+    const table = el("div", "w-full rounded-xl border border-neutral-500/20 overflow-hidden");
+    const COLS = "minmax(0,1fr) 140px 96px 168px";
+    const head = el("div", "grid items-center gap-3 px-4 py-2.5 text-[11px] font-medium " + T.muted);
+    head.style.gridTemplateColumns = COLS;
+    ["名称", "开发者", "版本", "操作"].forEach((t) => {
+      const cell = el("div", t === "操作" ? "text-right" : "", t);
+      head.appendChild(cell);
+    });
+    table.appendChild(head);
+    table.appendChild(el("div", "h-px bg-neutral-500/20"));
+
+    if (!rows.length) {
+      box.appendChild(el("div", "p-6 text-sm " + T.muted, "没有匹配的插件。"));
+      return box;
+    }
+    rows.forEach((p, i) => {
+      const row = renderRow(p);
+      // 行间细分隔线（首行不画，避免与外框重叠成双线）
+      if (i > 0) row.classList.add("border-t", "border-neutral-500/10");
+      table.appendChild(row);
+    });
+    box.appendChild(table);
+    return box;
+  }
+
+  // 一个插件行：图标瓷砖 + 名称/描述 | 开发者 | 版本 | 操作
+  function renderRow(p) {
+    const frag = el("div", "");
+    const row = el("div", "grid items-center gap-3 px-4 py-3 hover:bg-neutral-500/[0.07] transition-colors");
+    row.style.gridTemplateColumns = "minmax(0,1fr) 140px 96px 168px";
+
+    // ── 名称列：图标瓷砖 + 标题/描述
+    const nameCell = el("div", "flex items-center gap-3 min-w-0");
+    nameCell.appendChild(renderTile(p));
+    const txt = el("div", "min-w-0 flex-1");
+    txt.appendChild(el("div", "text-[13px] leading-tight font-medium truncate", p.name || p.id));
+    if (p.description) txt.appendChild(el("div", "mt-0.5 text-[11px] leading-snug truncate " + T.muted, p.description));
+    nameCell.appendChild(txt);
+    row.appendChild(nameCell);
+
+    // ── 开发者（官方插件给紫色徽章）
+    const authorCell = el("div", "min-w-0");
+    const official = /^(zhukunpenglinyutong|ccgui)$/i.test(str(p.author));
+    const badge = el(
+      "span",
+      "inline-block max-w-full truncate rounded px-1.5 py-0.5 text-[11px] " +
+        (official ? "bg-purple-500/15 text-purple-600 dark:text-purple-300" : T.muted),
+      official ? "CCGUI官方插件" : str(p.author) || "—",
+    );
+    badge.title = str(p.author) || "";
+    authorCell.appendChild(badge);
+    row.appendChild(authorCell);
+
+    // ── 版本
+    row.appendChild(el("div", "text-xs tabular-nums " + (p.version ? "text-neutral-600 dark:text-neutral-300" : T.muted), p.version ? "v" + p.version : "—"));
+
+    // ── 操作：已安装 → 灰底 ✓ 已安装（药丸态，与官方一致）；可更新 → 更新按钮
+    const inst = S.installing[p.id];
+    const ops = el("div", "flex items-center justify-end gap-1.5 shrink-0");
+    const localVer = S.installed[p.id];
+    const isInstalled = localVer !== undefined;
+    const canUpdate = isInstalled && p.version && compareVersions(localVer || "0", p.version) < 0;
+
+    if (inst && inst.busy) {
+      const b = el("button", T.btnPrimary, "安装中…");
+      b.type = "button";
+      b.disabled = true;
+      ops.appendChild(b);
+    } else if (isInstalled && !canUpdate) {
+      const pill = el(
+        "span",
+        "select-none shrink-0 whitespace-nowrap inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs bg-neutral-500/15 text-neutral-600 dark:text-neutral-300",
+        "✓ 已安装",
+      );
+      pill.title = localVer ? "已安装 v" + localVer : "已安装";
+      ops.appendChild(pill);
+    } else {
+      const btn = el("button", T.btnPrimary, canUpdate ? "更新" : "安装");
+      btn.type = "button";
+      if (canUpdate) btn.title = "已装 v" + localVer + " → v" + p.version;
+      btn.onclick = () => doInstall(p);
+      ops.appendChild(btn);
+    }
+
+    const exp = el("button", T.btn, S.expandedId === p.id ? "收起" : "详情");
+    exp.type = "button";
+    exp.onclick = () => {
+      S.expandedId = S.expandedId === p.id ? "" : p.id;
+      render();
+    };
+    ops.appendChild(exp);
+    row.appendChild(ops);
+    frag.appendChild(row);
+
+    if (inst && inst.msg) {
+      const cls = inst.msg.startsWith("✅")
+        ? "text-green-600 dark:text-green-400"
+        : inst.msg.startsWith("❌")
+          ? "text-red-600 dark:text-red-400"
+          : T.muted;
+      frag.appendChild(el("div", "px-4 pb-2 text-[11px] leading-snug " + cls, inst.msg));
+    }
+    if (S.expandedId === p.id) frag.appendChild(renderDetail(p));
+    return frag;
+  }
+
+  // 图标瓷砖：优先用真实 icon（仓库默认分支上的相对路径），否则用 id 恒定配色 + 首字。
+  function renderTile(p) {
+    const tile = el("div", "shrink-0 flex items-center justify-center rounded-lg text-white text-[13px] font-semibold overflow-hidden");
+    tile.style.width = "32px";
+    tile.style.height = "32px";
+    tile.style.background = tileGradient(p.id);
+    const src = iconUrl(p);
+    if (src) {
+      const img = el("img", "w-full h-full object-cover");
+      img.src = src;
+      img.alt = "";
+      img.onerror = () => {
+        img.remove();
+      };
+      tile.appendChild(img);
+    }
+    tile.appendChild(el("span", "", initials(p)));
+    // 图片加载成功后隐藏首字母
+    const imgEl = tile.querySelector("img");
+    if (imgEl) imgEl.onload = () => {
+      const s = tile.querySelector("span");
+      if (s) s.style.display = "none";
+    };
+    return tile;
+  }
+
+  // 由 repo + 登记里的 icon 相对路径拼出可访问的图标地址（默认分支，官方约定）。
+  function iconUrl(p) {
+    const icon = str(p.icon);
+    if (!icon) return "";
+    if (/^https?:\/\//i.test(icon)) return icon;
+    const rp = parseRepo(p.repo);
+    if (!rp) return "";
+    const base = "https://raw.githubusercontent.com/" + rp.owner + "/" + rp.name + "/" + (rp.ref || "main") + "/" + icon.replace(/^\.?\//, "");
+    const mirror = S.mirrors[0];
+    return mirror ? mirror.replace(/\/$/, "") + "/" + base : base;
+  }
+
   function renderMirrors() {
-    const bar = el("div", "mx-3 mt-2 flex items-center gap-2");
-    const input = el("input", "flex-1 px-2 py-1 text-xs rounded border border-neutral-500/40 bg-transparent outline-none");
+    const bar = el("div", "flex items-center gap-2");
+    bar.appendChild(el("span", "shrink-0 text-[11px] " + T.muted, "镜像前缀"));
+    const input = el("input", "flex-1 px-2 py-1 text-xs rounded-md border border-neutral-500/30 bg-transparent outline-none");
     input.type = "text";
     input.spellcheck = false;
-    input.placeholder = "国内镜像前缀，逗号分隔（如 https://ghproxy.net/,https://gh-proxy.com/）";
+    input.placeholder = "逗号分隔，如 https://ghproxy.net/,https://gh-proxy.com/";
     input.value = S.mirrors.join(",");
     input.onchange = () => {
       S.mirrors = input.value.split(",").map((s) => s.trim()).filter(Boolean);
       savePrefs();
+      refresh();
     };
     bar.appendChild(input);
     const clr = el("button", BTN, "恢复默认");
@@ -790,94 +1163,49 @@ export default function activate(ctx) {
   }
 
   function renderUpdate() {
-    const box = el("div", "mx-3 mt-2 px-2 py-1.5 rounded border border-neutral-500/25 space-y-1");
-    const row = el("div", "flex items-center gap-2");
-    row.appendChild(el("span", "text-xs font-medium", "客户端更新"));
+    const box = el("div", "flex items-center gap-2 flex-wrap");
+    box.appendChild(el("span", "text-[11px] " + T.muted, "客户端更新"));
     const cur = (ctx.host && ctx.host.appVersion) || "";
-    if (cur) row.appendChild(el("span", "text-[11px] text-neutral-500 dark:text-neutral-400", "当前 v" + cur));
+    if (cur) box.appendChild(el("span", "text-[11px] " + T.muted, "当前 v" + cur));
     const chk = el("button", BTN, S.upd.checking ? "检查中…" : "检查更新");
     chk.type = "button";
     chk.disabled = S.upd.checking || S.upd.downloading;
     chk.onclick = () => checkUpdate(false);
-    row.appendChild(chk);
+    box.appendChild(chk);
     if (S.upd.hasUpdate) {
-      const dl = el("button", BTN + " border-blue-500/60 text-blue-600 dark:text-blue-400", S.upd.downloading ? "下载中…" : "下载 v" + S.upd.latest);
+      const dl = el("button", T.btnPrimary, S.upd.downloading ? "下载中…" : "下载 v" + S.upd.latest);
       dl.type = "button";
       dl.disabled = S.upd.downloading;
       dl.onclick = downloadInstaller;
-      row.appendChild(dl);
+      box.appendChild(dl);
     }
-    box.appendChild(row);
     if (S.upd.msg) {
       const cls = S.upd.msg.startsWith("✅")
         ? "text-green-600 dark:text-green-400"
         : S.upd.msg.startsWith("❌")
           ? "text-red-600 dark:text-red-400"
-          : "text-neutral-500 dark:text-neutral-400";
-      box.appendChild(el("div", "text-[11px] leading-snug " + cls, S.upd.msg));
+          : T.muted;
+      box.appendChild(el("span", "text-[11px] " + cls, S.upd.msg));
     }
-    if (S.upd.downloaded) {
-      box.appendChild(el("div", "text-[11px] break-all text-neutral-500 dark:text-neutral-400", "位置：" + S.upd.downloaded));
-    }
+    if (S.upd.downloaded) box.appendChild(el("span", "text-[11px] break-all " + T.muted, "位置：" + S.upd.downloaded));
     if (S.upd.hasUpdate && S.upd.notes) {
-      const n = el("details", "text-[11px] text-neutral-500 dark:text-neutral-400");
-      const sum = el("summary", "cursor-pointer select-none", "查看 v" + S.upd.latest + " 更新日志");
-      n.appendChild(sum);
+      const n = el("details", "basis-full text-[11px] " + T.muted);
+      n.appendChild(el("summary", "cursor-pointer select-none", "查看 v" + S.upd.latest + " 更新日志"));
       n.appendChild(el("pre", "mt-1 whitespace-pre-wrap break-words font-sans max-h-40 overflow-auto", S.upd.notes));
       box.appendChild(n);
     }
     return box;
   }
 
-  function renderCard(p) {
-    const card = el("div", "mb-2 rounded-lg border border-neutral-500/25 overflow-hidden");
-    const top = el("div", "px-3 py-2 flex items-start gap-2");
-    const info = el("div", "flex-1 min-w-0");
-    info.appendChild(el("div", "text-sm font-medium truncate", p.name || p.id));
-    const meta = [];
-    if (p.author) meta.push(p.author);
-    if (p.version) meta.push("v" + p.version);
-    if (p.tier) meta.push("tier:" + p.tier);
-    info.appendChild(el("div", "text-[11px] text-neutral-500 dark:text-neutral-400 truncate", meta.join(" · ")));
-    top.appendChild(info);
-
-    const inst = S.installing[p.id];
-    const btn = el("button", BTN, inst && inst.busy ? "安装中…" : "安装");
-    btn.type = "button";
-    btn.disabled = !!(inst && inst.busy);
-    btn.onclick = () => doInstall(p);
-    top.appendChild(btn);
-    const exp = el("button", BTN, S.expandedId === p.id ? "收起" : "详情");
-    exp.type = "button";
-    exp.onclick = () => {
-      S.expandedId = S.expandedId === p.id ? "" : p.id;
-      render();
-    };
-    top.appendChild(exp);
-    card.appendChild(top);
-
-    if (p.description)
-      card.appendChild(el("div", "px-3 pb-2 text-xs leading-snug text-neutral-600 dark:text-neutral-300", p.description));
-
-    if (inst && inst.msg)
-      card.appendChild(el("div", "px-3 pb-2 text-[11px] leading-snug " + (inst.msg.startsWith("✅") ? "text-green-600 dark:text-green-400" : inst.msg.startsWith("❌") ? "text-red-600 dark:text-red-400" : "text-neutral-500"), inst.msg));
-
-    if (S.expandedId === p.id) card.appendChild(renderDetail(p));
-    return card;
-  }
-
   function renderDetail(p) {
-    const box = el("div", "px-3 pb-3 pt-1 border-t border-neutral-500/15 space-y-1");
+    const box = el("div", "mx-3 mb-3 px-3 py-2 rounded-md border border-neutral-500/20 space-y-1 bg-neutral-500/[0.04]");
     box.appendChild(kv("ID", p.id));
-    box.appendChild(kv("repo", p.repo || "—"));
-    box.appendChild(kv("清单 url", p.url || "—"));
+    box.appendChild(kv("仓库", p.repo ? "github.com/" + p.repo : "—"));
+    if (p.updatedAt) box.appendChild(kv("更新时间", p.updatedAt));
     const eps = buildFileEndpoints(p, "manifest.json", { mirrorPrefixes: S.mirrors });
-    box.appendChild(el("div", "text-[11px] text-neutral-500 dark:text-neutral-400", "manifest 下载回退链："));
-    const ol = el("ol", "pl-5 text-[11px] text-neutral-500 dark:text-neutral-400 list-decimal");
-    for (const u of eps) {
-      const li = el("li", "break-all", u);
-      ol.appendChild(li);
-    }
+    box.appendChild(el("div", "text-[11px] " + T.muted, "manifest 下载回退链："));
+    const ol = el("ol", "pl-5 text-[11px] " + T.muted + " list-decimal");
+    for (const u of eps) ol.appendChild(el("li", "break-all", u));
     if (!eps.length) ol.appendChild(el("li", "", "（无法定位：清单缺 repo/url）"));
     box.appendChild(ol);
     if (p.repo) {
@@ -895,14 +1223,14 @@ export default function activate(ctx) {
         setTimeout(() => (cp.textContent = "复制仓库地址"), 1500);
       };
       box.appendChild(cp);
-      box.appendChild(el("div", "text-[11px] break-all text-neutral-500 dark:text-neutral-400", repoUrl));
+      box.appendChild(el("div", "text-[11px] break-all " + T.muted, repoUrl));
     }
     return box;
   }
 
   function kv(k, v) {
     const row = el("div", "flex gap-2 text-[11px]");
-    row.appendChild(el("span", "shrink-0 text-neutral-500 dark:text-neutral-400", k + "："));
+    row.appendChild(el("span", "shrink-0 " + T.muted, k + "："));
     row.appendChild(el("span", "break-all text-neutral-700 dark:text-neutral-200", v));
     return row;
   }
@@ -918,7 +1246,24 @@ export default function activate(ctx) {
         await loadPrefs();
         await loadCache();
         render();
-        if (!S.plugins.length) refresh();
+        // 已装列表：有缓存也照样读一次（缓存里没带 installed，且它很便宜）。
+        loadInstalled().then(render).catch(() => {});
+        if (!S.plugins.length) {
+          refresh();
+        } else if (S.plugins.some((p) => !S.extraMeta[p.id])) {
+          // 有缓存先画一帧，后台补版本/图标（不阻塞浏览）
+          S.metaLoading = true;
+          loadMarketMeta()
+            .then(() => {
+              S.metaLoading = false;
+              render();
+              saveCache();
+            })
+            .catch(() => {
+              S.metaLoading = false;
+              render();
+            });
+        }
         if (!S.upd.latest) checkUpdate(true); // 静默检查一次客户端更新
       })();
       return () => {
@@ -969,13 +1314,8 @@ export default function activate(ctx) {
       if (typeof ctx.ui.openCenterTab === "function") ctx.ui.openCenterTab("github-mirror-marketplace");
     },
   });
-  // 右侧面板页签（宿主有此扩展点时也挂一份）。
-  reg(ctx.ui.registerPanelTab, {
-    key: "github-mirror-marketplace",
-    label: () => "社区市场",
-    icon: Icon,
-    component: Panel,
-  });
+  // 注：不注册右侧面板页签（registerPanelTab）——它与中心页签内容重复，
+  // 只是多占一份界面位置。市场入口统一走「中心页签 + 侧边栏 + ⌘K 命令」。
   // 命令面板（⌘K）一条"刷新社区市场"，便于不切页签也能拉一次。
   reg(ctx.ui.registerCommand, {
     key: "github-mirror-marketplace.refresh",

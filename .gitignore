@@ -1,3 +1,8 @@
 node_modules/
 .superpowers/
 *.log
+docs/git respo password.txt
+.ccgui/
+.claude/
+openspec/
+prompt-optimizer/

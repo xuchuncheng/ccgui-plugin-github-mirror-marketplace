@@ -1,0 +1,173 @@
+/*
+ * Claude 笑脸图标 + XoCodeX 文字 + 输入框亮边 —— CC GUI 插件样式
+ *
+ * 分工：
+ *   - 笑脸图标 + 文字替换：由 main.js 直接改 DOM（最稳，不受 CSS 层叠影响）。
+ *   - 输入框描边：本文件负责（纯装饰）。
+ *
+ * ⚠️ 为什么必须 !important（上一版边框没变化的根因）：
+ *   宿主把插件 styles.css 强制包进 @layer ccgui-plugins（context.ts:mountPluginCss），
+ *   而 index.css 声明 `@layer ccgui-plugins, theme, base, components, utilities;`
+ *   ——ccgui-plugins 是【最低优先级层】，输入框容器的 shadow-xs/border 在最高的
+ *   utilities 层。CSS 层叠层优先级【压过】选择器特异性，普通写法必输。
+ *   !important 会反转层叠优先级（低层的 !important 胜过高层的普通声明），故能生效。
+ *   官方已上架的同类样式插件（composer-rainbow-border）用的正是这一招。
+ *
+ * 做法：只把输入框已有的 1px 边框【染亮】（改 border-color），保留宿主轻微投影；
+ *   聚焦时更亮并补一圈柔和外发光。塌陷态输入框不渲染 .composer-editable
+ *   （ai-chat-composer.tsx:285），故 :has 只命中展开态，不会误伤。
+ */
+
+:root {
+  /* 常态边框色：亮青蓝；聚焦更亮。想换色只改这两个变量。 */
+  --ccgui-composer-edge: rgba(56, 189, 248, 0.7);
+  --ccgui-composer-edge-focus: rgba(56, 189, 248, 1);
+}
+
+/* 输入框外层容器：div.rounded-2xl.border > .composer-editable。
+   用稳定的 .composer-editable 反查父容器，不依赖会变动的 hash 类名。 */
+div:has(> .composer-editable) {
+  border-color: var(--ccgui-composer-edge) !important;
+}
+
+/* 聚焦（在输入框内打字）时：边框提亮 + 一圈柔和外发光，轮廓更跳。 */
+div:has(> .composer-editable):focus-within {
+  border-color: var(--ccgui-composer-edge-focus) !important;
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18) !important;
+}
+
+/* ── 隐藏侧栏会话行左侧的引擎头像 ────────────────────────────────────
+ * 目标：ThreadItem 行首那枚 12px 引擎图标（Claude 会被本插件换成熟脸，
+ *   其它引擎是各自的品牌标）不再显示，标题左移，行更干净。
+ *
+ * 定位只用「aside 内 + 行根 div 带 pl-9」：pl-9 是会话行独有的缩进工具类
+ *   （仓库头是 p-2、worktree 行是 pl-4、展开更多行也是 pl-4），一直是宿主
+ *   里唯一稳定的行锚点；不依赖会随构建变化的 hash 类名。
+ *   图标是行内 <button> 的【直接子元素】（img 或 svg），而置顶行的 Pin
+ *   图标嵌在标题 span 里——用 `> img` / `> svg` 直接子组合器只命中引擎
+ *   图标，不会误伤置顶标记。
+ *
+ * 为什么 !important：本文件被包进最低优先级的 @layer ccgui-plugins，
+ *   层叠层优先级压过选择器特异性；!important 会反转层优先序（低层
+ *   important 胜出），与上面输入框描边同理。
+ *
+ * display:none 后该元素退出 flex 布局，gap-2.5 不再为它留位，标题自然
+ *   回到 36px 缩进处（树的弯线收在 28px，仍对齐）。 */
+aside div[class~="pl-9"] > button > img,
+aside div[class~="pl-9"] > button > svg {
+  display: none !important;
+}
+
+/* ── 输入框底栏：固定中国国旗图标 + 【模型】·【思考等级】 ──────────────
+ * 宿主 CliMenuTrigger（cli-menu.tsx:169-250）默认平铺
+ *   「引擎名 / 模型 · 等级 [Fast]」，引擎图标还跟着当前引擎变。
+ * 这里精简成
+ *   [🇨🇳]  模型 · 等级 [Fast]
+ * 三项都只改视觉：点击照旧弹出原生引擎/模型/等级面板，功能一点不少。
+ *
+ * 选择器依据（v1.1.9 源码逐条核对）：
+ *   - 触发器 <button class="group … gap-1.5 rounded-md px-1.5 py-1">；
+ *     这四个工具类的组合全仓唯一（cli-menu.tsx:207），再套
+ *     div:has(> .composer-editable) 限定在输入框里，双保险。
+ *   - 图标是 button 的直接子元素（img 或 svg）——直接隐藏，改用 ::before
+ *     画国旗（::before 在 flex 容器里就是一个 flex item，天然排在
+ *     原图标位置，不用改 DOM 去和 React 抢节点）。
+ *   - 文字在 button 唯一的直接子 <span> 里，子节点顺序：
+ *       引擎名 → "/" → 模型 → "·" → 等级 → Fast
+ *     引擎名 span 只有 max-md:hidden、不带 text-text-tertiary / inline-grid；
+ *     "/" 与 "·" 类名完全相同，只能靠「下一个兄弟是模型 span(max-w-44)」
+ *     认出 "/"（:has() 在 WebView2/Chromium 可用）。
+ *
+ * 为什么国旗用 background-image 而不是 mask：
+ *   mask 只保留形状、颜色取 background-color，会把国旗染成单色灰。
+ *   国旗必须保持红底黄星，所以走 background-image 全彩渲染；尺寸用
+ *   contain 保持 3:2 比例（16px 宽 → 10.67px 高，垂直居中不撑高行高）。
+ *   data URI 内只用单引号、不含远程地址，宿主的远程资源门禁不会命中。 */
+
+div:has(> .composer-editable)
+  button[class~="group"][class~="gap-1.5"][class~="rounded-md"][class~="px-1.5"][class~="py-1"]::before {
+  content: "" !important;
+  flex: 0 0 auto !important;
+  width: 16px !important;
+  height: 16px !important;
+  /* 国旗边角微圆：与周围 4px 圆角的控件同一语言，避免尖角扎眼。 */
+  border-radius: 2px !important;
+  background-color: transparent !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 20'%3E%3Crect width='30' height='20' fill='%23DE2910'/%3E%3Cg fill='%23FFDE00'%3E%3Cpath d='M5,2 5.674,4.073 7.853,4.073 6.09,5.354 6.763,7.427 5,6.146 3.237,7.427 3.91,5.354 2.147,4.073 4.326,4.073Z'/%3E%3Cpath d='M10.391,1.08 10.328,1.803 10.996,2.088 10.288,2.251 10.224,2.975 9.851,2.352 9.143,2.514 9.62,1.966 9.246,1.343 9.914,1.628Z'/%3E%3Cpath d='M12.718,3.304 12.378,3.946 12.884,4.467 12.168,4.343 11.829,4.985 11.726,4.266 11.01,4.141 11.662,3.821 11.56,3.102 12.065,3.624Z'/%3E%3Cpath d='M12.939,6.657 12.367,7.105 12.616,7.787 12.014,7.382 11.442,7.83 11.641,7.131 11.038,6.725 11.765,6.699 11.964,6.001 12.213,6.683Z'/%3E%3Cpath d='M10.353,8.064 10.319,8.79 10.999,9.046 10.298,9.239 10.265,9.964 9.865,9.357 9.165,9.55 9.618,8.982 9.219,8.375 9.899,8.632Z'/%3E%3C/g%3E%3C/svg%3E") !important;
+  background-size: contain !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+}
+
+/* 原引擎图标（img / svg）让位给上面的 ::before。 */
+div:has(> .composer-editable)
+  button[class~="group"][class~="gap-1.5"][class~="rounded-md"][class~="px-1.5"][class~="py-1"]
+  > img,
+div:has(> .composer-editable)
+  button[class~="group"][class~="gap-1.5"][class~="rounded-md"][class~="px-1.5"][class~="py-1"]
+  > svg {
+  display: none !important;
+}
+
+/* 引擎名（"XoCodeX" / "Codex CLI" …）整段隐去：只留模型 + 等级。
+   只在「确实有模型 span」时才隐——没有模型列表的引擎保留引擎名，
+   否则会退化成只剩一个孤零零的「· 高」。 */
+div:has(> .composer-editable)
+  button[class~="group"][class~="gap-1.5"][class~="rounded-md"][class~="px-1.5"][class~="py-1"]:has(
+    > span > span[class~="max-w-44"]
+  )
+  > span
+  > span[class~="max-md:hidden"]:not([class~="text-text-tertiary"]):not(
+    [class~="inline-grid"]
+  ) {
+  display: none !important;
+}
+
+/* 引擎名与模型之间的 "/"：与模型后的 "·" 类名相同，靠「下一兄弟是模型
+   span」区分；只干掉前者，保留 "·" 作模型与等级的视觉分隔。 */
+div:has(> .composer-editable)
+  button[class~="group"][class~="gap-1.5"][class~="rounded-md"][class~="px-1.5"][class~="py-1"]
+  > span
+  > span[class~="text-text-tertiary"][class~="max-md:hidden"]:has(
+    + span[class~="max-w-44"]
+  ) {
+  display: none !important;
+}
+
+/* ── 隐藏会话页签左侧的引擎图标（v1.5.0） ────────────────────────────
+ * 目标：对话区顶部页签条里，每个【会话页签】行首那枚 12px 引擎标
+ *   （Claude 显示为笑脸）。隐藏后页签只剩状态点 + 标题，和侧栏一致。
+ *
+ * 只动会话页签，文件 / 浏览器 / 插件 / 任务 / 版本说明这些页签的图标
+ *   保持原样——它们的图标承载的是「这是哪种内容」，不是引擎品牌。
+ *
+ * 怎么在 CSS 里认出「会话页签」：页签根 div 带 data-tab-key，值是 tab key。
+ *   会话 key 是 `${engine}/${sessionId}` 或 `new:${engine}:${path}`
+ *   （persistence.ts sessionKey），不带任何前缀；其余 7 类页签各有固定
+ *   前缀（file: / browser: / plugin-tab: / plugin-hub: / mission: /
+ *   release-notes: / diff:），所以用 :not() 前缀链排除即可。
+ *   新增页签类型时若忘了补 :not()，那个页签的图标会一并被隐藏——这是
+ *   有意的保守取舍：宁可多隐一个，也不误留笑脸。
+ *
+ * 图标是 [role="tab"] 的直接子元素（img 或 svg）；标题、状态点、脏标都是
+ *   span，不会被 > img / > svg 命中。data-tab-strip 由 SessionTabStrip
+ *   根节点提供（全仓唯一），用来把规则限制在页签条内。 */
+
+[data-tab-strip]
+  [data-tab-key]:not([data-tab-key^="file:"]):not([data-tab-key^="browser:"]):not(
+    [data-tab-key^="plugin-tab:"]
+  ):not([data-tab-key^="plugin-hub:"]):not([data-tab-key^="mission:"]):not(
+    [data-tab-key^="release-notes:"]
+  ):not([data-tab-key^="diff:"])
+  [role="tab"]
+  > img,
+[data-tab-strip]
+  [data-tab-key]:not([data-tab-key^="file:"]):not([data-tab-key^="browser:"]):not(
+    [data-tab-key^="plugin-tab:"]
+  ):not([data-tab-key^="plugin-hub:"]):not([data-tab-key^="mission:"]):not(
+    [data-tab-key^="release-notes:"]
+  ):not([data-tab-key^="diff:"])
+  [role="tab"]
+  > svg {
+  display: none !important;
+}

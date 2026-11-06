@@ -1,0 +1,16 @@
+{
+  "id": "filetree-open-with",
+  "name": "文件树 · 在关联应用中打开",
+  "version": "0.1.0",
+  "tier": "js",
+  "description": "在右侧文件树右键菜单里追加“在关联应用中打开”，用系统默认关联程序打开选中的文件或文件夹（宿主未开放文件树菜单扩展点，故以 DOM 注入方式实现）。",
+  "author": "ccgui-local",
+  "minAppVersion": "1.0.0",
+  "permissions": [
+    "exec:cmd",
+    "storage",
+    "ui:settings-section"
+  ],
+  "repo": "xuchuncheng/ccgui-plugin-filetree-open-with",
+  "license": "MIT"
+}

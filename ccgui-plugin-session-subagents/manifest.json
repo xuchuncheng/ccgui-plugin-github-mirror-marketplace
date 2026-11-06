@@ -1,0 +1,24 @@
+{
+  "id": "session-subagents",
+  "name": "会话子代理计数",
+  "version": "0.1.0",
+  "tier": "js",
+  "minAppVersion": "1.0.6",
+  "sdkVersion": "^0.3",
+  "author": "ccgui-local",
+  "description": "左侧会话列表里，正在跑子代理（Task/Agent/Workflow 等）的会话行右侧显示一枚虚线胶囊「运行中/总数」；点开在该行下方浮出子代理清单（类型徽章 + 描述 + 运行中/已完成）。数据来自引擎事件流，纯实时，不做历史统计。纯前端，不联网、不起进程。",
+  "permissions": [
+    "storage",
+    "ui:settings-section"
+  ],
+  "keywords": [
+    "subagent",
+    "子代理",
+    "子任务",
+    "task",
+    "agent",
+    "sidebar"
+  ],
+  "license": "MIT",
+  "repo": "xuchuncheng/ccgui-plugin-session-subagents"
+}

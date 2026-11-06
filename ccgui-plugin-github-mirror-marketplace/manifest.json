@@ -1,16 +1,15 @@
 {
   "id": "github-mirror-marketplace",
   "name": "社区插件市场镜像加速",
-  "version": "1.1.1",
+  "version": "1.2.4",
   "minAppVersion": "1.0.6",
   "sdkVersion": "^0.3",
-  "description": "国内网络下 GitHub 静态资源被拦截、内置插件市场打不开时：按「主地址→JsDelivr CDN→国内镜像」自动回退抓取 community-plugins.json，在社区市场页签浏览并一键下载安装社区插件。",
+  "description": "国内网络下 GitHub 静态资源被拦截、内置插件市场打不开时：按「主地址→JsDelivr→国内镜像」自动回退抓取 community-plugins.json，在社区市场页签（分类/排序/搜索）浏览并一键安装社区插件。",
   "author": "xuchuncheng",
   "repo": "xuchuncheng/ccgui-plugin-github-mirror-marketplace",
   "tier": "js",
   "license": "MIT",
   "permissions": [
-    "ui:panel-tab",
     "ui:center-tab",
     "ui:sidebar-entry",
     "ui:command",

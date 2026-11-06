@@ -1,0 +1,32 @@
+{
+  "id": "project-knowledge",
+  "name": "项目知识",
+  "version": "0.1.0",
+  "tier": "js",
+  "sdkVersion": "^0.3",
+  "minAppVersion": "1.1.1",
+  "author": "xuchuncheng",
+  "repo": "xuchuncheng/ccgui-plugin-project-knowledge",
+  "description": "把当前项目的「笔记 / 待办 / 计划」挂载进对话上下文：右侧面板三 Tab 可增删改，挂载按会话隔离，发送前自动注入给模型，移出后不再带入。",
+  "permissions": [
+    "ui:panel-tab",
+    "ui:composer-status",
+    "storage",
+    "events",
+    "prompt.contribute.internal",
+    "host:session",
+    "composer:draft"
+  ],
+  "keywords": [
+    "notes",
+    "todo",
+    "plan",
+    "context",
+    "项目知识",
+    "笔记",
+    "待办",
+    "计划"
+  ],
+  "icon": "docs/icon.svg",
+  "license": "MIT"
+}
