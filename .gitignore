@@ -6,3 +6,6 @@ docs/git respo password.txt
 .claude/
 openspec/
 prompt-optimizer/
+
+# git worktrees（本地隔离工作区）
+.worktrees/
