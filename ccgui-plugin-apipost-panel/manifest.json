@@ -1,0 +1,17 @@
+{
+  "id": "apipost-panel",
+  "name": "API",
+  "version": "0.10.0",
+  "tier": "js",
+  "description": "Apipost 接口面板：登录、浏览项目与目录树，通过官方 MCP 新建项目、在目录树任意层级新建目录，生成/补全接口定义，导出对外 Word 文档",
+  "author": "dijia",
+  "permissions": [
+    "ui:panel-tab",
+    "theme",
+    "storage",
+    "composer:draft",
+    "network:open.apipost.net",
+    "exec:explorer",
+    "exec:python"
+  ]
+}
